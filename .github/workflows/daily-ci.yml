@@ -1,0 +1,42 @@
+name: daily-ci
+
+# CI hang ngay cho fork rieng vanbienperu3107/CLIProxyAPI-daily.
+#
+# Muc dich: build + test MOI NGAY (khong doi push) de biet code hien tai cua
+# nhanh main (duoc dong bo tu upstream router-for-me/CLIProxyAPI qua
+# sync-upstream.yml) con bien dich va qua test hay khong, truoc khi
+# image.yml dong anh de trien khai.
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build + test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./...
