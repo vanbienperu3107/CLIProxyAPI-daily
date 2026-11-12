@@ -1,0 +1,73 @@
+name: daily-sync-upstream
+
+# Dong bo hang ngay tu router-for-me/CLIProxyAPI vao nhanh main cua repo nay.
+#
+# Repo nay LA mot ban sao (khong con lien ket "fork" chinh thuc tren GitHub,
+# vi tai khoan da dung fork chinh thuc cho vanbienperu3107/cliproxy_mod).
+# remote "upstream" duoc them ngay trong step duoi (khong luu trong git
+# config cua checkout, vi moi lan chay la 1 checkout moi).
+#
+# Chi fast-forward: neu main cua repo nay da bi sua tay (khong nen xay ra,
+# repo nay chi la nguon build), buoc merge se dung lai va bao loi ro rang
+# thay vi am tham ghi de.
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: daily-sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Fetch upstream + fast-forward main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cau hinh git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Them remote upstream + fetch
+        run: |
+          git remote add upstream https://github.com/router-for-me/CLIProxyAPI.git
+          git fetch upstream main
+
+      - name: So sanh va fast-forward
+        id: ff
+        run: |
+          LOCAL=$(git rev-parse main)
+          REMOTE=$(git rev-parse upstream/main)
+          echo "main hien tai:    $LOCAL"
+          echo "upstream/main:     $REMOTE"
+          if [ "$LOCAL" = "$REMOTE" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Khong co commit moi tu upstream."
+            exit 0
+          fi
+          git checkout main
+          if ! git merge --ff-only upstream/main; then
+            echo "::error::main cua repo nay khong the fast-forward len upstream/main - co commit la o day khong co o upstream. Can xem lai thu cong."
+            exit 1
+          fi
+          git push origin main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Bao hieu daily-ci chay (push da tu trigger, dispatch de chac chan)
+        if: steps.ff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Da cap nhat main len ${{ steps.ff.outputs.sha }} - push se tu kich daily-ci."
