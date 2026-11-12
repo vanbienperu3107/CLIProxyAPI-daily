@@ -10,7 +10,6 @@ on:
   push:
     branches:
       - main
-      - "feat/**"
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch: {}
